@@ -39,4 +39,4 @@
 
 ## 当前状态（每次重大变更后更新此节）
 
-- 2026-07-03：P1 进行中。脚手架已建，schema/金样本/LLM网关/CI 已就绪，尚未出第一条视频。后续见 NEXT_STEPS.md。
+- 2026-07-03：P1 完成——管线五阶段(worker/stages/)就绪，首条番茄炒蛋验证片 QC 全绿(57.2s)。Azure maomao-dev 资源组 + F0 Speech 已建。P2 进行中：GPU 作业包在 worker/gpu/（用户在 2070Ti 上跑脚本→push 候选图→此处筛选），协作方式为"脚本+git 传送带"，2070Ti 上不装 Claude Code。
