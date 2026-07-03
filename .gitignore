@@ -1,0 +1,30 @@
+# 环境与密钥 — 永不入库
+.env
+.env.*
+!.env.example
+*cookie*
+*.pem
+
+# 视频工作目录（本地留 7 天，成品归档在 Azure Blob）
+projects/
+*.mp4
+*.mov
+*.wav
+*.mp3
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Node
+node_modules/
+
+# 系统
+.DS_Store
+
+# 模型权重（LoRA 等大文件走本地/Blob，不进 git）
+*.safetensors
+*.ckpt
+*.pt

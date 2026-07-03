@@ -1,0 +1,33 @@
+{
+  "recipe_id": "fanqie-chaodan",
+  "name": "番茄炒蛋",
+  "description": "国民家常菜，酸甜下饭。金样本菜谱，用于 CI 端到端测试。",
+  "sources": [
+    "https://www.xiachufang.com/recipe/100562484/",
+    "https://www.meishichina.com/mofang/fanqiechaodan/"
+  ],
+  "servings": 2,
+  "total_time_min": 8,
+  "difficulty": "简单",
+  "ingredients": [
+    { "name": "鸡蛋", "amount": 3, "unit": "个", "note": "约 150g" },
+    { "name": "番茄", "amount": 2, "unit": "个", "note": "约 300g，选熟透的" },
+    { "name": "食用油", "amount": 25, "unit": "ml" },
+    { "name": "盐", "amount": 2, "unit": "g" },
+    { "name": "白糖", "amount": 3, "unit": "g", "note": "提鲜中和酸味" },
+    { "name": "小葱", "amount": 1, "unit": "根", "note": "切葱花" }
+  ],
+  "steps": [
+    { "order": 1, "action": "鸡蛋 3 个打入碗中，加 1g 盐，筷子打散至蛋液均匀", "heat": "无", "duration_sec": 60, "visual_cue": "蛋液表面出现细密泡沫", "ingredients_used": ["鸡蛋", "盐"] },
+    { "order": 2, "action": "番茄 2 个去蒂，切成 3cm 滚刀块", "heat": "无", "duration_sec": 90, "visual_cue": "块状均匀、保留汁水", "ingredients_used": ["番茄"] },
+    { "order": 3, "action": "锅烧热倒油 15ml，油温五成热（木筷插入冒小泡）倒入蛋液", "heat": "中火", "duration_sec": 30, "visual_cue": "蛋液边缘立即凝固鼓起", "ingredients_used": ["食用油", "鸡蛋"] },
+    { "order": 4, "action": "蛋液半凝固时用铲子推散成大块，盛出备用", "heat": "中火", "duration_sec": 40, "visual_cue": "蛋块金黄、中心微嫩", "ingredients_used": ["鸡蛋"] },
+    { "order": 5, "action": "原锅补油 10ml，下番茄块翻炒出汁", "heat": "中火", "duration_sec": 120, "visual_cue": "番茄软塌、析出红色汤汁", "ingredients_used": ["食用油", "番茄"] },
+    { "order": 6, "action": "加 1g 盐、3g 白糖调味，倒回鸡蛋块翻炒均匀，让蛋块吸收汤汁", "heat": "中火", "duration_sec": 60, "visual_cue": "蛋块裹满红汁", "ingredients_used": ["盐", "白糖", "鸡蛋", "番茄"] },
+    { "order": 7, "action": "关火撒葱花，出锅装盘", "heat": "无", "duration_sec": 15, "visual_cue": "葱花翠绿点缀", "ingredients_used": ["小葱"] }
+  ],
+  "tips": [
+    "喜欢汤汁多可在第 5 步加 30ml 清水",
+    "糖只放 3g，作用是中和酸味不是吃甜"
+  ]
+}

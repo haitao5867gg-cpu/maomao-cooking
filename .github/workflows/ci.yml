@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Lint
+        run: ruff check .
+      - name: Unit + schema 契约测试
+        run: pytest tests/ -v
+
+  # P3 接入：金样本端到端测试（固定 recipe fixture 走完整管线，
+  # LLM 用录制 fixture、上传 mock，ffprobe 校验产物时长/分辨率/音轨）
+  # golden-e2e:
+  #   runs-on: ubuntu-latest
+  #   steps: ...

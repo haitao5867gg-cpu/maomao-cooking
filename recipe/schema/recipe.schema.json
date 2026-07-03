@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "maomao/recipe.schema.json",
+  "title": "结构化菜谱 — 全系统契约。旁白/字幕只能从本文件生成。",
+  "type": "object",
+  "required": ["recipe_id", "name", "sources", "servings", "total_time_min", "ingredients", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "recipe_id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "sources": {
+      "description": "真实菜谱来源，至少 2 个用于交叉比对",
+      "type": "array", "minItems": 2,
+      "items": { "type": "string", "format": "uri" }
+    },
+    "servings": { "type": "integer", "minimum": 1 },
+    "total_time_min": { "type": "number", "exclusiveMinimum": 0 },
+    "difficulty": { "enum": ["简单", "中等", "较难"] },
+    "ingredients": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "amount", "unit"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "amount": { "type": "number", "exclusiveMinimum": 0 },
+          "unit": {
+            "description": "统一单位白名单，校验器强制",
+            "enum": ["g", "ml", "个", "只", "根", "片", "瓣", "勺", "茶匙", "汤匙", "适量"]
+          },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "steps": {
+      "type": "array", "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["order", "action", "duration_sec"],
+        "additionalProperties": false,
+        "properties": {
+          "order": { "type": "integer", "minimum": 1 },
+          "action": { "type": "string", "minLength": 4, "description": "本步操作，含用量引用" },
+          "heat": { "enum": ["大火", "中火", "小火", "中小火", "无"] },
+          "duration_sec": { "type": "number", "exclusiveMinimum": 0, "description": "现实中该步耗时（秒）" },
+          "visual_cue": { "type": "string", "description": "完成判断标准，如'蛋液边缘凝固'" },
+          "ingredients_used": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "tips": { "type": "array", "items": { "type": "string" } }
+  }
+}
