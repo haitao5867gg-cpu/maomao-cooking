@@ -26,8 +26,25 @@
 | `uploader/` | biliup 封装 + 失败降级（存Blob+面板卡片+告警） |
 | `analytics/` | B站播放数据拉取入库 |
 | `dashboard/` | Azure Static Web Apps 面板 + Functions API |
-| `infra/` | bicep，env 参数部署 maomao-{dev,staging,prod} 三资源组 |
+| `infra/` | Azure 部署脚本 + bicep，env 参数部署 maomao-{dev,staging,prod} 三资源组 |
 | `assets/` | 猫 LoRA 指针、姿势模板、分镜模板、BGM 库 |
+
+## Azure 资源清单（dev 环境）
+
+| 资源类型 | 名称 | 资源组 | 区域 | 备注 |
+|---|---|---|---|---|
+| 资源组 | `maomao-dev` | — | East Asia | 所有 dev 资源的容器 |
+| 存储账户 | `maomaodevstore` | maomao-dev | East Asia | Standard_LRS, StorageV2 |
+| Speech 服务 | `maomao-speech-dev` | maomao-dev | East Asia | F0 免费层，中文 TTS |
+| 队列 | `dev-gpu-jobs` | maomaodevstore | — | GPU 出图作业队列 |
+| 队列 | `dev-gpu-jobs-poison` | maomaodevstore | — | GPU 作业死信队列 |
+| 队列 | `dev-pipeline-jobs` | maomaodevstore | — | Mac 编排管线队列 |
+| Blob 容器 | `dev-gpu-output` | maomaodevstore | — | GPU 生成的图片 |
+| Blob 容器 | `dev-videos` | maomaodevstore | — | 成品视频归档 |
+| Table | `devtasks` | maomaodevstore | — | 任务状态表（worker 首次运行自动创建） |
+
+> 连接串存于各机器本地 `.env-maomao`，**不进 git**（铁律 #6）。
+> staging/prod 环境资源命名规则相同，前缀分别为 `staging-` / `prod-`，存储账户分别为 `maomaostagingstore` / `maomaoprodstore`。
 
 ## 关键约定
 
@@ -41,3 +58,4 @@
 
 - 2026-07-03：P1 完成——管线五阶段(worker/stages/)就绪，首条番茄炒蛋验证片 QC 全绿(57.2s)。Azure maomao-dev 资源组 + F0 Speech 已建。
 - 2026-07-04：P2 GPU Worker 架构确定——2070Ti 改为无头节点，diffusers 直接推理（不用 A1111/ComfyUI WebUI），通过 Azure Queue 自主领活。网络模型：2070Ti 裸连家庭宽带（不需 VPN），只做出站 HTTPS 到 Azure；Mac 和 2070Ti 物理上互不可见不影响生产。详见 ARCHITECTURE.md "GPU Worker 架构" 章节。
+- 2026-07-04：Azure Storage 账户 `maomaodevstore` 已创建（East Asia, Standard_LRS），队列（dev-gpu-jobs / poison / pipeline-jobs）和 Blob 容器（dev-gpu-output / dev-videos）就绪。部署脚本 `infra/setup-dev-storage.sh`。
