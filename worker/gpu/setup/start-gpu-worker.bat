@@ -4,7 +4,7 @@ title 猫猫炒菜 GPU Worker
 
 :: ===== 配置 =====
 :: 修改为你的实际路径
-set REPO_DIR=C:\maomao-cooking
+set REPO_DIR=E:\maomao-cooking
 set PYTHON=python
 
 :: Azure 连接串（从 .env-maomao 读取，或直接写在这里）
