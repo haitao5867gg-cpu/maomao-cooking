@@ -1,0 +1,27 @@
+[Unit]
+Description=猫猫炒菜 GPU Worker (2070Ti)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=maomao
+WorkingDirectory=/home/maomao/maomao-cooking
+EnvironmentFile=/home/maomao/.env-maomao
+ExecStart=/usr/bin/python3 -m worker.gpu.worker_loop
+
+# 崩溃后 10s 重启
+Restart=on-failure
+RestartSec=10
+
+# 优雅关闭：发 SIGTERM，等 120s（让当前推理完成）
+TimeoutStopSec=120
+KillSignal=SIGTERM
+
+# 日志
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=maomao-gpu
+
+[Install]
+WantedBy=multi-user.target

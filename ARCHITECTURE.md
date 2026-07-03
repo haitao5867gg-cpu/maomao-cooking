@@ -15,7 +15,8 @@
 | LLM 策略 | 开发/迭代 = 现有 Claude 订阅（headless Claude Code）；生产文案 = DeepSeek API 直连（夜间避峰）；备用 = Azure AI Foundry。统一 LLM 网关配置（base_url + key），换供应商改一行 |
 | 任务队列 | Azure Storage Queue，两台机器出站轮询领活（拉取模式，机器间零耦合） |
 | 状态面板 | Azure Static Web Apps（免费层）+ Functions 消费计划 + Table Storage，成本 ≈ $0 |
-| 本地算力 | 2070Ti 机器 = GPU worker；Mac mini = 编排/渲染/上传 worker，均 24h 运行 |
+| 本地算力 | 2070Ti 机器 = 无头 GPU worker（diffusers 直接推理，不装 WebUI）；Mac mini = 编排/渲染/上传 worker，均 24h 运行 |
+| GPU 推理 | diffusers + safetensors 直接加载 SDXL+LoRA，不经过 A1111/ComfyUI——8GB 显存零浪费，无需 Web 服务进程 |
 
 ## 核心架构原则
 
@@ -38,15 +39,18 @@
 └──────────────▲───────────────────────────────▲────────────────────────────┘
         出站轮询│领活+回写状态                    │出站轮询领活+回写状态
 ┌──────────────┴──────────────┐  ┌─────────────┴──────────────┐
-│ Mac mini（编排+渲染 worker）  │  │ 2070Ti 机器（GPU worker）    │
-│ · 调度器（内容日历→当日任务）  │  │ · SD/SDXL+猫LoRA 批量出图    │
-│ · 菜谱调研+结构化+校验(批量)   │  │   (夜间一次会话摊薄模型加载)  │
-│ · DeepSeek 文案生成(夜间避峰) │  │ · ControlNet 姿势模板        │
-│ · Remotion 渲染 (9:16)       │  │ · Real-ESRGAN 超分           │
-│ · biliup 上传（含降级）       │  └─────────────────────────────┘
-│ · 每日拉取 B站播放数据         │      告警(Telegram/Bark)→手机：
-│ · 告警推送                    │      job卡住>2h / worker掉线>10min
-└─────────────────────────────┘      / 上传失败 / cookie失效
+│ Mac mini（编排+渲染 worker）  │  │ 2070Ti 机器（无头 GPU worker）│
+│ · 调度器（内容日历→当日任务）  │  │ · 无显示器、无 WebUI          │
+│ · 菜谱调研+结构化+校验(批量)   │  │ · diffusers 直接推理          │
+│ · DeepSeek 文案生成(夜间避峰) │  │   SDXL+猫LoRA 批量出图        │
+│ · Remotion 渲染 (9:16)       │  │   (模型常驻 VRAM，跨任务复用)  │
+│ · biliup 上传（含降级）       │  │ · ControlNet 姿势模板         │
+│ · 每日拉取 B站播放数据         │  │ · Real-ESRGAN 超分            │
+│ · 告警推送                    │  │ · systemd 守护进程，开机自启   │
+└─────────────────────────────┘  └─────────────────────────────┘
+                                     告警(Telegram/Bark)→手机：
+                                     job卡住>2h / worker掉线>10min
+                                     / 上传失败 / cookie失效
 ```
 
 ## 内容流水线
@@ -84,6 +88,116 @@ maomao-cooking/
 ├── infra/                 # Azure IaC（bicep）
 ├── assets/                # 猫主角 LoRA、姿势模板、分镜模板、BGM 库
 └── projects/              # 每条视频工作目录（gitignore，本地留 7 天）
+```
+
+## GPU Worker 架构（2070Ti 无头节点）
+
+### 设计决策
+
+**选 diffusers 直接推理，不用 A1111/ComfyUI。** 理由：
+
+1. **显存优先**：8GB VRAM，WebUI 进程本身占 200-400MB 开销，diffusers 零浪费。
+2. **确定性**：pin `diffusers==x.y.z`，没有 WebUI 升级/插件冲突的风险。项目铁律"生产的可靠性来自确定性"。
+3. **无头部署**：不需要 Web 服务器进程、不开端口、不需要显示器。`pip install` + systemd 即完成部署。
+4. **模型常驻**：worker 进程持续运行，SDXL+LoRA 加载一次常驻 VRAM，跨任务复用，省去每次冷启动 30-60s。
+
+### 网络模型
+
+2070Ti **不需要 VPN**，只需家庭宽带的出站 HTTPS：
+
+```
+2070Ti ──HTTPS──→ Azure Storage Queue（轮询领活）
+       ──HTTPS──→ Azure Blob Storage（上传生成结果）
+       ──HTTPS──→ Azure Table Storage（回写任务状态）
+       ──本地───→ 127.0.0.1（diffusers 推理，无网络端口）
+```
+
+Mac 和 2070Ti 物理上互不可见也不影响生产。偶尔维护时，Mac VPN 开 split tunnel 可 SSH 到 2070Ti 局域网 IP。
+
+### 模块结构
+
+```
+worker/gpu/
+├── worker_loop.py          # 主循环：轮询队列 → 调推理 → 上传结果 → 回写状态
+├── inference.py            # diffusers 封装：模型加载、LoRA 注入、批量生图
+├── generate_candidates.py  # P2 候选图生成（角色定型用，复用 inference.py）
+└── setup/
+    ├── requirements-gpu.txt       # 2070Ti Python 依赖（torch/diffusers/azure-storage/...）
+    ├── start-gpu-worker.bat       # Windows 启动脚本（含崩溃自动重启循环）
+    ├── install-task-scheduler.bat # 注册 Windows 任务计划（开机自启）
+    └── gpu-worker.service         # Linux systemd unit（备用）
+```
+
+### 队列消息格式（GPU 作业）
+
+Mac 编排器往 `{env}-gpu-jobs` 队列发消息，2070Ti worker 领取执行：
+
+```json
+{
+  "video_id": "tomato-egg-001",
+  "job_type": "scene_batch",
+  "scenes": [
+    {
+      "scene_id": "00_hook",
+      "prompt": "cute orange tabby cat chef, round chubby face, big amber eyes, white chef hat, red apron, happy expression, holding tomato, cozy kitchen background",
+      "negative_prompt": "realistic photo, human, deformed, extra limbs, text, watermark, blurry",
+      "seed": 42,
+      "width": 832,
+      "height": 1216,
+      "steps": 28,
+      "cfg_scale": 6.5
+    }
+  ],
+  "lora": {"name": "maomao-v1", "weight": 0.8},
+  "controlnet_pose": "assets/poses/holding_item.png",
+  "output_blob_prefix": "gpu-output/tomato-egg-001/"
+}
+```
+
+### Worker 主循环
+
+```
+启动 → 加载 SDXL+LoRA 到 VRAM（一次性，常驻）
+  ↓
+轮询 {env}-gpu-jobs 队列（30s 间隔，无消息时空转）
+  ↓
+领取消息 → 解析作业 → 逐场景推理 → 本地暂存 PNG
+  ↓
+批量上传 Blob Storage → 回写 Table Storage（video_id, stage=gpu, status=done）
+  ↓
+删除队列消息 → 回到轮询
+```
+
+失败处理：单场景推理失败重试 2 次 → 整条作业进死信队列 `{env}-gpu-jobs-poison` → 告警。
+
+### 2070Ti 部署（一次性，Windows）
+
+```powershell
+# 1. 克隆仓库到 C:\maomao-cooking
+git clone <repo> C:\maomao-cooking
+cd C:\maomao-cooking
+git checkout feature/p2-gpu-worker
+
+# 2. 安装 PyTorch（CUDA 12.x）+ 项目依赖
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip install -r worker\gpu\setup\requirements-gpu.txt
+
+# 3. 环境变量（创建 %USERPROFILE%\.env-maomao）
+# 写入两行：
+#   AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...
+#   MAOMAO_ENV=dev
+
+# 4. 下载 SDXL 模型（首次约 6GB，需几分钟）
+python -m worker.gpu.inference --download-model
+
+# 5. 注册开机自启（管理员身份运行）
+worker\gpu\setup\install-task-scheduler.bat
+
+# 6. 首次手动启动
+worker\gpu\setup\start-gpu-worker.bat
+
+# 完成。此后不需要登录这台机器。
+# 更新代码：远程桌面 → git pull → 重启 start-gpu-worker.bat
 ```
 
 ## 多环境与发布工程（保护 prod 的三道闸）

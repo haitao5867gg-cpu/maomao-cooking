@@ -1,26 +1,27 @@
 """P2: 猫主角形象候选图批量生成。
 
-在 2070Ti 机器上运行（需 WebUI 已启动）：
-    pip install requests
-    python worker/gpu/generate_candidates.py
+在 2070Ti 机器上运行：
+    pip install -r worker/gpu/setup/requirements-gpu.txt
+    python -m worker.gpu.generate_candidates
 
 3 套画风 × 12 个固定 seed = 36 张候选，输出到 assets/candidates/batch01/，
-每张附 sidecar json（prompt/seed 可复现）。跑完 git push 回仓库供筛选。
+每张附 sidecar json（prompt/seed 可复现）。
 选定画风后，该风格词 + seed 即成为角色一致性基线，并用于 LoRA 训练集生成。
+
+结果通过 Azure Blob 上传供 Mac 端筛选（不再依赖 git 传送带或 HTTP 文件服务器）。
 """
 from __future__ import annotations
 
-import base64
 import json
 import time
 from pathlib import Path
 
-import requests
+from worker.gpu.inference import load_pipeline, generate_image
 
-API = "http://127.0.0.1:7860/sdapi/v1/txt2img"
+# 输出到仓库内 assets/candidates/batch01/
 OUT = Path(__file__).resolve().parents[2] / "assets" / "candidates" / "batch01"
 
-# 角色核心设定（所有画风共用，未来写进 CLAUDE.md 角色规范）
+# 角色核心设定（所有画风共用）
 CHARACTER = (
     "cute orange tabby cat chef, round chubby face, big amber eyes, "
     "white chef hat, red apron, happy expression, standing in cozy kitchen, "
@@ -39,46 +40,41 @@ STYLES = {
 SEEDS = [42, 101, 202, 303, 404, 505, 606, 707, 808, 909, 1234, 5678]
 
 
-def gen(style_key: str, style_words: str, seed: int) -> None:
-    out_img = OUT / f"{style_key}_seed{seed}.jpg"
+def gen(pipe, style_key: str, style_words: str, seed: int) -> None:
+    out_img = OUT / f"{style_key}_seed{seed}.png"
     if out_img.exists():
         return
-    payload = {
+
+    params = {
         "prompt": f"{CHARACTER}, {style_words}",
         "negative_prompt": NEGATIVE,
         "seed": seed,
-        "steps": 28,
-        "cfg_scale": 6.5,
         "width": 832,
         "height": 1216,
-        "sampler_name": "DPM++ 2M Karras",
+        "steps": 28,
+        "cfg_scale": 6.5,
     }
     t0 = time.time()
-    r = requests.post(API, json=payload, timeout=600)
-    r.raise_for_status()
-    img_b64 = r.json()["images"][0]
-    # 存 jpg 控制仓库体积
-    from io import BytesIO
+    img = generate_image(pipe, **params)
+    img.save(out_img)
 
-    from PIL import Image
-
-    Image.open(BytesIO(base64.b64decode(img_b64))).convert("RGB").save(out_img, quality=92)
     out_img.with_suffix(".json").write_text(
-        json.dumps({k: payload[k] for k in ("prompt", "negative_prompt", "seed", "steps", "cfg_scale", "width", "height", "sampler_name")}, ensure_ascii=False, indent=2),
+        json.dumps(params, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    print(f"✓ {out_img.name}  ({time.time() - t0:.0f}s)")
+    print(f"[OK] {out_img.name}  ({time.time() - t0:.0f}s)")
 
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     total = len(STYLES) * len(SEEDS)
+    print(f"加载模型...")
+    pipe = load_pipeline()
     print(f"开始生成 {total} 张候选图 → {OUT}")
     for style_key, style_words in STYLES.items():
         for seed in SEEDS:
-            gen(style_key, style_words, seed)
-    print("完成。接下来：")
-    print("  git checkout -b p2-cat-candidates && git add assets/candidates && git commit -m 'P2: 猫主角候选图 batch01' && git push -u origin p2-cat-candidates")
+            gen(pipe, style_key, style_words, seed)
+    print(f"\n完成！{total} 张候选图已保存到 {OUT}")
 
 
 if __name__ == "__main__":

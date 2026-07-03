@@ -20,7 +20,7 @@
 | 目录 | 职责 |
 |---|---|
 | `openmontage/` | 子模块（AGPL-3.0）。工具库+Remotion 模板来源，勿改其内部，用包装层 |
-| `worker/` | 队列轮询框架 + `stages/`（幂等管线阶段）+ `gpu/`（2070Ti 出图/超分） |
+| `worker/` | 队列轮询框架 + `stages/`（幂等管线阶段）+ `gpu/`（2070Ti 无头 worker：diffusers 直接推理，不用 WebUI） |
 | `recipe/` | 菜谱抓取、结构化、校验。`schema/recipe.schema.json` 是全系统契约 |
 | `llm/` | LLM 网关（OpenAI 兼容，DeepSeek/Foundry 切换）+ prompt 模板 |
 | `uploader/` | biliup 封装 + 失败降级（存Blob+面板卡片+告警） |
@@ -39,4 +39,5 @@
 
 ## 当前状态（每次重大变更后更新此节）
 
-- 2026-07-03：P1 完成——管线五阶段(worker/stages/)就绪，首条番茄炒蛋验证片 QC 全绿(57.2s)。Azure maomao-dev 资源组 + F0 Speech 已建。P2 进行中：GPU 作业包在 worker/gpu/（用户在 2070Ti 上跑脚本→push 候选图→此处筛选），协作方式为"脚本+git 传送带"，2070Ti 上不装 Claude Code。
+- 2026-07-03：P1 完成——管线五阶段(worker/stages/)就绪，首条番茄炒蛋验证片 QC 全绿(57.2s)。Azure maomao-dev 资源组 + F0 Speech 已建。
+- 2026-07-04：P2 GPU Worker 架构确定——2070Ti 改为无头节点，diffusers 直接推理（不用 A1111/ComfyUI WebUI），通过 Azure Queue 自主领活。网络模型：2070Ti 裸连家庭宽带（不需 VPN），只做出站 HTTPS 到 Azure；Mac 和 2070Ti 物理上互不可见不影响生产。详见 ARCHITECTURE.md "GPU Worker 架构" 章节。

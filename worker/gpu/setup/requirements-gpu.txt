@@ -1,0 +1,20 @@
+# 2070Ti GPU Worker 依赖
+# CUDA 12.x 需预装，PyTorch 按 https://pytorch.org 选对应版本
+
+# 推理
+torch>=2.1.0
+diffusers>=0.27.0
+transformers>=4.36.0
+accelerate>=0.25.0
+safetensors>=0.4.0
+
+# 图像处理
+Pillow>=10.0.0
+
+# Azure（队列轮询 + Blob 上传 + Table 回写）
+azure-storage-queue>=12.8.0
+azure-storage-blob>=12.19.0
+azure-data-tables>=12.5.0
+
+# 超分（P2 后期）
+# realesrgan>=0.3.0
