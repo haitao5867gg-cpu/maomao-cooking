@@ -154,6 +154,14 @@ def main() -> None:
 
         try:
             job = json.loads(msg.content)
+        except json.JSONDecodeError as e:
+            # 消息体不是合法 JSON（例如被 Base64 编码过）——重试无意义，直接进死信
+            print(f"[worker] 消息不是合法 JSON，移入死信队列: {e}")
+            poison_client.send_message(msg.content)
+            queue_client.delete_message(msg)
+            continue
+
+        try:
             process_job(pipe, job, blob_client, table_client)
             queue_client.delete_message(msg)
         except Exception as e:

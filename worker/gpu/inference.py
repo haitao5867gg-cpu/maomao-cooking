@@ -15,6 +15,8 @@ from PIL import Image
 
 # 模型配置（可通过环境变量覆盖）
 DEFAULT_MODEL = os.environ.get("MAOMAO_SD_MODEL", "stabilityai/stable-diffusion-xl-base-1.0")
+# fp16-fix VAE：解码不需要升 float32，避免 8GB 显存溢出到共享内存导致 3-4 倍降速
+DEFAULT_VAE = os.environ.get("MAOMAO_SD_VAE", "madebyollin/sdxl-vae-fp16-fix")
 LORA_PATH = os.environ.get("MAOMAO_LORA_PATH", "")  # P2 训练后填入
 LORA_WEIGHT = float(os.environ.get("MAOMAO_LORA_WEIGHT", "0.8"))
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -22,13 +24,20 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 def load_pipeline(model_id: str | None = None, lora_path: str | None = None):
     """加载 SDXL pipeline，优化 8GB 显存。返回 pipeline 对象。"""
-    from diffusers import StableDiffusionXLPipeline
+    from diffusers import AutoencoderKL, StableDiffusionXLPipeline
 
     model_id = model_id or DEFAULT_MODEL
     print(f"[inference] 加载模型: {model_id} → {DEVICE}")
 
+    # fp16-fix VAE（约 320MB，首次从 HF_ENDPOINT 下载）。
+    # 官方 SDXL VAE 的 force_upcast=True 会在解码时升 float32，8GB 卡显存被顶爆后
+    # 溢出到共享内存，之后所有推理降速 3-4 倍。fp16-fix 版无需 upcast。
+    vae = AutoencoderKL.from_pretrained(DEFAULT_VAE, torch_dtype=torch.float16)
+    print(f"[inference] VAE: {DEFAULT_VAE} (fp16, no upcast)")
+
     pipe = StableDiffusionXLPipeline.from_pretrained(
         model_id,
+        vae=vae,
         torch_dtype=torch.float16,
         variant="fp16",
         use_safetensors=True,
@@ -109,6 +118,9 @@ def generate_batch(
         img.save(out_path)
         print(f"[inference] 生成: {out_path.name}")
         paths.append(out_path)
+        # 每张之间清缓存，避免碎片累积
+        if DEVICE == "cuda":
+            torch.cuda.empty_cache()
 
     return paths
 
