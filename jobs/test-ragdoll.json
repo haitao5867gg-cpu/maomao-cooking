@@ -1,0 +1,17 @@
+{
+  "video_id": "test-ragdoll-001",
+  "job_type": "scene_batch",
+  "scenes": [
+    {
+      "scene_id": "ragdoll_seed42",
+      "prompt": "cute ragdoll cat, chibi proportions, short stubby limbs, round chubby face, big blue eyes, fluffy cream fur, brown color-point ears and face mask, smiling, sitting, front view, upper body, plain pastel background, 3D render, pixar style, soft lighting, vibrant colors",
+      "negative_prompt": "realistic photo, human, human hands, human fingers, deformed, extra limbs, extra tails, multiple cats, bad anatomy, mutated paws, lowres, text, watermark, blurry, dark, scary, ugly",
+      "seed": 42,
+      "width": 832,
+      "height": 1216,
+      "steps": 28,
+      "cfg_scale": 6.5
+    }
+  ],
+  "output_blob_prefix": "gpu-output/test-ragdoll-001/"
+}

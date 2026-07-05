@@ -1,12 +1,14 @@
-# HANDOFF — 跨机器 session 交接（2026-07-05 更新）
+# HANDOFF — 跨机器 session 交接（2026-07-05 晚 最终更新）
 
 > 新 session 第一步：读本文件 + CLAUDE.md + ARCHITECTURE.md。本文件记录"文档还没来得及沉淀"的实时状态。
 
-## 当前进行中（P2：猫主角候选图）
+## 当前状态（P2：候选图已完成，待筛选）
 
-- **batch03 正在 2070Ti 上生成**：3 风格（A_3d_pixar / B_flat_kawaii / C_ghibli_soft）× 12 seed = 36 张，输出 Blob `dev-gpu-output` 容器 `gpu-output/candidates-batch03/`。
-- prompt 已精简至 ~60 token（batch02 的 82 token 超 CLIP 77 被截断，已废弃）。当前基线 prompt 见本文件末尾附录。
-- 跑完后下一步：从 Blob 拉 36 张图筛选 → 定画风+seed 基线 → LoRA 训练集 → 分镜模板。
+- **batch03 已跑完**：3 风格（A_3d_pixar / B_flat_kawaii / C_ghibli_soft）× 12 seed = 36 张，在 Blob `dev-gpu-output` 容器 `gpu-output/candidates-batch03/`。基线 prompt 见本文件末尾附录（~60 token，勿超 CLIP 77）。
+- **全链路验证全绿**：布偶猫单场景测试（`gpu-output/test-ragdoll-001/ragdoll_seed42.png`）无警告无报错，速度 ~4s/it（fp16-fix VAE 生效）。
+- **接手后第一件事：从 Blob 拉 batch03 的 36 张图给用户筛选** → 定画风+seed 基线 → LoRA 训练集 → 分镜模板。i2v 路线下优先推荐 A 组（3D）。
+- **发 GPU 任务的标准方式**（勿再用 Portal 手点）：写 JSON 到 `jobs/*.json`（格式参考 `jobs/test-ragdoll.json`），用户在 Mac 终端跑：
+  `cd <仓库目录> && .venv/bin/python3 worker/send_job.py jobs/xxx.json`
 
 ## 重大决策（尚未写入 ARCHITECTURE.md，待办）
 
