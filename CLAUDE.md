@@ -59,3 +59,4 @@
 - 2026-07-03：P1 完成——管线五阶段(worker/stages/)就绪，首条番茄炒蛋验证片 QC 全绿(57.2s)。Azure maomao-dev 资源组 + F0 Speech 已建。
 - 2026-07-04：P2 GPU Worker 架构确定——2070Ti 改为无头节点，diffusers 直接推理（不用 A1111/ComfyUI WebUI），通过 Azure Queue 自主领活。网络模型：2070Ti 裸连家庭宽带（不需 VPN），只做出站 HTTPS 到 Azure；Mac 和 2070Ti 物理上互不可见不影响生产。详见 ARCHITECTURE.md "GPU Worker 架构" 章节。
 - 2026-07-04：Azure Storage 账户 `maomaodevstore` 已创建（East Asia, Standard_LRS），队列（dev-gpu-jobs / poison / pipeline-jobs）和 Blob 容器（dev-gpu-output / dev-videos）就绪。部署脚本 `infra/setup-dev-storage.sh`。
+- 2026-07-05：**P2 GPU Worker 端到端验证通过**——从 Azure Portal 手动往 dev-gpu-jobs 发测试任务，2070Ti worker 自动领取、SDXL 推理（28步/1分43秒）、上传图片到 dev-gpu-output Blob（`gpu-output/test-001/00_test.png`, 1.11MiB）、回写任务表。全链路无人工干预。Mac .venv 已建好（python3 + azure-storage-queue 等依赖）。
