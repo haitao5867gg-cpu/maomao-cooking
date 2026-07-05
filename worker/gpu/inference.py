@@ -32,16 +32,22 @@ def load_pipeline(model_id: str | None = None, lora_path: str | None = None):
     # fp16-fix VAE（约 320MB，首次从 HF_ENDPOINT 下载）。
     # 官方 SDXL VAE 的 force_upcast=True 会在解码时升 float32，8GB 卡显存被顶爆后
     # 溢出到共享内存，之后所有推理降速 3-4 倍。fp16-fix 版无需 upcast。
-    vae = AutoencoderKL.from_pretrained(DEFAULT_VAE, torch_dtype=torch.float16)
-    print(f"[inference] VAE: {DEFAULT_VAE} (fp16, no upcast)")
+    # 下载失败不致命：退回官方 VAE 继续跑（慢但可用）。
+    vae = None
+    try:
+        vae = AutoencoderKL.from_pretrained(DEFAULT_VAE, torch_dtype=torch.float16)
+        print(f"[inference] VAE: {DEFAULT_VAE} (fp16, no upcast)")
+    except Exception as e:
+        print(f"[inference] 警告: fp16-fix VAE 加载失败（{e}），退回官方 VAE（速度会慢）")
 
-    pipe = StableDiffusionXLPipeline.from_pretrained(
-        model_id,
-        vae=vae,
+    kwargs = dict(
         torch_dtype=torch.float16,
         variant="fp16",
         use_safetensors=True,
     )
+    if vae is not None:
+        kwargs["vae"] = vae
+    pipe = StableDiffusionXLPipeline.from_pretrained(model_id, **kwargs)
     pipe = pipe.to(DEVICE)
 
     # 8GB 显存优化
