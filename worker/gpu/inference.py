@@ -36,7 +36,10 @@ def load_pipeline(model_id: str | None = None, lora_path: str | None = None):
     pipe = pipe.to(DEVICE)
 
     # 8GB 显存优化
-    pipe.enable_vae_tiling()
+    if hasattr(pipe.vae, "enable_tiling"):
+        pipe.vae.enable_tiling()
+    elif hasattr(pipe, "enable_vae_tiling"):
+        pipe.enable_vae_tiling()
     if hasattr(pipe, "enable_attention_slicing"):
         pipe.enable_attention_slicing()
 

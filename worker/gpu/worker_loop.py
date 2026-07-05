@@ -38,7 +38,10 @@ def _get_queue_client():
     from azure.storage.queue import QueueClient
     conn = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
     client = QueueClient.from_connection_string(conn, QUEUE_NAME)
-    client.create_queue()  # 幂等
+    try:
+        client.create_queue()
+    except Exception:
+        pass  # 已存在
     return client
 
 
@@ -46,7 +49,10 @@ def _get_poison_queue_client():
     from azure.storage.queue import QueueClient
     conn = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
     client = QueueClient.from_connection_string(conn, POISON_QUEUE)
-    client.create_queue()
+    try:
+        client.create_queue()
+    except Exception:
+        pass  # 已存在
     return client
 
 
