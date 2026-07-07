@@ -20,14 +20,31 @@
 | 目录 | 职责 |
 |---|---|
 | `openmontage/` | 子模块（AGPL-3.0）。工具库+Remotion 模板来源，勿改其内部，用包装层 |
-| `worker/` | 队列轮询框架 + `stages/`（幂等管线阶段）+ `gpu/`（2070Ti 出图/超分） |
+| `worker/` | 队列轮询框架 + `stages/`（幂等管线阶段）+ `gpu/`（2070Ti 无头 worker：diffusers 直接推理，不用 WebUI） |
 | `recipe/` | 菜谱抓取、结构化、校验。`schema/recipe.schema.json` 是全系统契约 |
 | `llm/` | LLM 网关（OpenAI 兼容，DeepSeek/Foundry 切换）+ prompt 模板 |
 | `uploader/` | biliup 封装 + 失败降级（存Blob+面板卡片+告警） |
 | `analytics/` | B站播放数据拉取入库 |
 | `dashboard/` | Azure Static Web Apps 面板 + Functions API |
-| `infra/` | bicep，env 参数部署 maomao-{dev,staging,prod} 三资源组 |
+| `infra/` | Azure 部署脚本 + bicep，env 参数部署 maomao-{dev,staging,prod} 三资源组 |
 | `assets/` | 猫 LoRA 指针、姿势模板、分镜模板、BGM 库 |
+
+## Azure 资源清单（dev 环境）
+
+| 资源类型 | 名称 | 资源组 | 区域 | 备注 |
+|---|---|---|---|---|
+| 资源组 | `maomao-dev` | — | East Asia | 所有 dev 资源的容器 |
+| 存储账户 | `maomaodevstore` | maomao-dev | East Asia | Standard_LRS, StorageV2 |
+| Speech 服务 | `maomao-speech-dev` | maomao-dev | East Asia | F0 免费层，中文 TTS |
+| 队列 | `dev-gpu-jobs` | maomaodevstore | — | GPU 出图作业队列 |
+| 队列 | `dev-gpu-jobs-poison` | maomaodevstore | — | GPU 作业死信队列 |
+| 队列 | `dev-pipeline-jobs` | maomaodevstore | — | Mac 编排管线队列 |
+| Blob 容器 | `dev-gpu-output` | maomaodevstore | — | GPU 生成的图片 |
+| Blob 容器 | `dev-videos` | maomaodevstore | — | 成品视频归档 |
+| Table | `devtasks` | maomaodevstore | — | 任务状态表（worker 首次运行自动创建） |
+
+> 连接串存于各机器本地 `.env-maomao`，**不进 git**（铁律 #6）。
+> staging/prod 环境资源命名规则相同，前缀分别为 `staging-` / `prod-`，存储账户分别为 `maomaostagingstore` / `maomaoprodstore`。
 
 ## 关键约定
 
@@ -39,4 +56,11 @@
 
 ## 当前状态（每次重大变更后更新此节）
 
-- 2026-07-03：P1 完成——管线五阶段(worker/stages/)就绪，首条番茄炒蛋验证片 QC 全绿(57.2s)。Azure maomao-dev 资源组 + F0 Speech 已建。P2 进行中：GPU 作业包在 worker/gpu/（用户在 2070Ti 上跑脚本→push 候选图→此处筛选），协作方式为"脚本+git 传送带"，2070Ti 上不装 Claude Code。
+- 2026-07-03：P1 完成——管线五阶段(worker/stages/)就绪，首条番茄炒蛋验证片 QC 全绿(57.2s)。Azure maomao-dev 资源组 + F0 Speech 已建。
+- 2026-07-04：P2 GPU Worker 架构确定——2070Ti 改为无头节点，diffusers 直接推理（不用 A1111/ComfyUI WebUI），通过 Azure Queue 自主领活。网络模型：2070Ti 裸连家庭宽带（不需 VPN），只做出站 HTTPS 到 Azure；Mac 和 2070Ti 物理上互不可见不影响生产。详见 ARCHITECTURE.md "GPU Worker 架构" 章节。
+- 2026-07-04：Azure Storage 账户 `maomaodevstore` 已创建（East Asia, Standard_LRS），队列（dev-gpu-jobs / poison / pipeline-jobs）和 Blob 容器（dev-gpu-output / dev-videos）就绪。部署脚本 `infra/setup-dev-storage.sh`。
+- 2026-07-05：**P2 GPU Worker 端到端验证通过**——从 Azure Portal 手动往 dev-gpu-jobs 发测试任务，2070Ti worker 自动领取、SDXL 推理（28步/1分43秒）、上传图片到 dev-gpu-output Blob（`gpu-output/test-001/00_test.png`, 1.11MiB）、回写任务表。全链路无人工干预。Mac .venv 已建好（python3 + azure-storage-queue 等依赖）。
+- 2026-07-05（晚）：**P2 候选图 batch03 完成（36 张，3 画风 × 12 seed，Blob `gpu-output/candidates-batch03/`）**。期间修复：① prompt 超 CLIP 77 token 被截断 → 精简至 ~60 token（基线 prompt 见 HANDOFF.md 附录）；② 官方 VAE fp32 解码致 8GB 显存溢出、推理降速 3.6 倍 → 换 `madebyollin/sdxl-vae-fp16-fix`（2070Ti 上 hf_hub 走 hf-mirror 失败，已手动 curl 下载到 `E:\SDXLModel\sdxl-vae-fp16-fix\`，启动时设 `MAOMAO_SD_VAE` 指向该目录；代码含下载失败退回官方 VAE 的保底）。**发任务标准方式 = Mac 上 `worker/send_job.py`**（Portal 弹窗有 Base64 编码坑，worker 只认纯文本 JSON）。布偶猫单场景测试全绿（~4s/it）。
+- 2026-07-05：**动画路线变更（重大，ARCHITECTURE.md 待更新）**——改为即梦/可灵网页版图生视频（用户仅有会员无 API）：SDXL+LoRA 只出每镜首帧 → 人工 i2v 工位（自动打包首帧+运动 prompt，用户网页上传/下载回投）→ Remotion 降级为拼接层（字幕/BGM/TTS）。跨机器交接文档 = HANDOFF.md。
+- 2026-07-07：**i2v 全自动化（即梦 CLI 接入，分支 feature/i2v-dreamina-cli）**——即梦官方推出 dreamina CLI（高级会员可用，异步 submit/query/download），"人工 i2v 工位"取消。新增 `worker/i2v/dreamina.py`（CLI 封装：提交/轮询/下载/积分预算护栏 `MAOMAO_I2V_MAX_CLIPS_PER_RUN` 默认12）+ `worker/stages/s2b_i2v.py`（首帧→clip，运动 prompt 按场景类型固定模板，只写运镜不写外观）。s4_compose 改为 clips/ 优先、无 clip 回退静态图；pipeline 由 `MAOMAO_I2V=1` 开启（默认关，CI 不受影响）。Mac mini 一次性手动步骤：安装 CLI + `dreamina login` + `dreamina user_credit` 自检。
+- 2026-07-07：**题材变更（重大）**——主角由猫改为 Q 版人物「锁暝」，世界观为《鸣潮》同人（瑝珑）。系列长线：复原《百味帖》菜谱 + 收集传奇七大厨具，目标瑝珑第一厨神。故事圣经 = **STORY.md**（含厨具设定/配角/视频结构落地/IP 风险备注）。剧情文案与菜谱旁白分轨：剧情可模板化创作，用量/火候仍只从 recipe.json 生成（铁律 #3 不变）。原猫 LoRA/候选图路线需换角色重跑（batch03 作画风参考仍有效）。
