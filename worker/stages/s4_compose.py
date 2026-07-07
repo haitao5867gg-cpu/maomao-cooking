@@ -1,4 +1,4 @@
-"""Stage 4: scenes/*.png + audio/*.wav → final.mp4（ffmpeg 合成）。
+"""Stage 4: clips/*.mp4（优先）或 scenes/*.png + audio/*.wav → final.mp4（ffmpeg 合成）。
 
 每个场景时长 = 对应 wav 时长 + 0.4s 呼吸间隔；无音频时用 narration.json 估时。
 输出 1080x1920 H.264 + AAC。幂等：final.mp4 已存在则跳过。
@@ -37,10 +37,14 @@ def run(workdir: str | Path, force: bool = False) -> Path:
     for i, sc in enumerate(scenes):
         stem = f"{i:02d}_{sc['scene']}"
         png = workdir / "scenes" / f"{stem}.png"
+        clip = workdir / "clips" / f"{stem}.mp4"  # s2b_i2v 产物，可选
         wav = workdir / "audio" / f"{stem}.wav"
         seg = segdir / f"{stem}.mp4"
         dur = (_dur(wav) if wav.exists() else sc["est_duration_sec"]) + PAD
-        cmd = ["ffmpeg", "-y", "-v", "error", "-loop", "1", "-i", str(png)]
+        if clip.exists():  # 动态 clip 优先；不够长则循环补足
+            cmd = ["ffmpeg", "-y", "-v", "error", "-stream_loop", "-1", "-i", str(clip)]
+        else:  # 回退：静态首帧 loop
+            cmd = ["ffmpeg", "-y", "-v", "error", "-loop", "1", "-i", str(png)]
         if wav.exists():
             cmd += ["-i", str(wav)]
         else:
